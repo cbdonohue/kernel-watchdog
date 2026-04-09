@@ -101,7 +101,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "^/bin/su$|^/usr/bin/su$"
+        value: '^/bin/su$|^/usr/bin/su$'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ rules:
     conditions:
       - field: path
         op: regex
-        value: "\.ssh/(id_rsa|id_ed25519|id_ecdsa|id_dsa)$"
+        value: '\.ssh/(id_rsa|id_ed25519|id_ecdsa|id_dsa)$'
 
   - name: cron-modification
     description: Cron file opened for writing (persistence mechanism)
@@ -202,7 +202,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "/(bash|sh|zsh|fish|dash|ksh|tcsh)$"
+        value: '/(bash|sh|zsh|fish|dash|ksh|tcsh)$'
 
   - name: netcat-exec
     description: netcat/ncat executed — possible reverse shell or data exfil
@@ -213,7 +213,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "/(nc|ncat|netcat|nmap)$"
+        value: '/(nc|ncat|netcat|nmap)$'
 
   - name: curl-wget-exec
     description: curl or wget executed — possible download cradle
@@ -224,7 +224,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "/(curl|wget)$"
+        value: '/(curl|wget)$'
 
   - name: python-exec
     description: Python interpreter spawned
@@ -235,7 +235,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "/(python|python3|python2)(\.\d+)?$"
+        value: '/(python|python3|python2)(\.\d+)?$'
 
   - name: compiler-exec
     description: Compiler invoked (gcc, clang, make) — possible in-place build
@@ -246,7 +246,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "/(gcc|clang|cc|make|cmake)$"
+        value: '/(gcc|clang|cc|make|cmake)$'
 
   - name: package-manager-exec
     description: Package manager invoked (apt, yum, dnf, pip)
@@ -257,7 +257,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "/(apt|apt-get|yum|dnf|pip|pip3|npm|yarn)$"
+        value: '/(apt|apt-get|yum|dnf|pip|pip3|npm|yarn)$'
 
   - name: suid-binary-exec
     description: Common SUID binary executed from unexpected location
@@ -268,7 +268,7 @@ rules:
     conditions:
       - field: filename
         op: regex
-        value: "/(pkexec|newgrp|passwd|chsh|chfn|mount|umount)$"
+        value: '/(pkexec|newgrp|passwd|chsh|chfn|mount|umount)$'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -317,4 +317,4 @@ rules:
     conditions:
       - field: dst
         op: startswith
-        value: "127."
+        value: '127.'
