@@ -1,0 +1,320 @@
+# kernel-watchdog default rules
+# ─────────────────────────────────────────────────────────────────────────────
+# Format:
+#   config:         global settings (alerts, log paths, etc.)
+#   rules:          list of detection rules
+#
+# Each rule:
+#   name:           unique label
+#   description:    human summary
+#   event_type:     exec | open | connect | privesc | *
+#   severity:       critical | high | medium | low | info
+#   enabled:        true | false
+#   tags:           list of category tags
+#   conditions:     list of field matchers (ALL must match — AND logic)
+#     - field: <event field name>
+#       op:   eq | ne | contains | startswith | endswith | regex | in | not_in | lt | gt
+#       value: <comparison value>
+#       negate: true  # optional — inverts this condition
+#   alert:          per-rule alert overrides (future use)
+#
+# Event fields by type:
+#   exec:     pid, ppid, uid, gid, comm, filename, args
+#   open:     pid, uid, gid, flags, comm, path
+#   connect:  pid, uid, comm, src, dst, dport, sport
+#   privesc:  pid, uid, new_uid, comm, syscall
+# ─────────────────────────────────────────────────────────────────────────────
+
+config:
+  # Telegram notifications
+  telegram:
+    enabled: false
+    bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+    chat_id: "YOUR_CHAT_ID"
+    min_severity: high    # alert only on high or critical
+
+  # Generic webhook (Slack, PagerDuty, custom)
+  webhook:
+    enabled: false
+    url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+    headers:
+      Content-Type: application/json
+    min_severity: medium
+
+  # File-based alert log
+  log:
+    enabled: true
+    path: alerts.jsonl
+    min_severity: info
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRIVILEGE ESCALATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+rules:
+  - name: setuid-to-root
+    description: Non-root process called setuid(0) — possible privilege escalation
+    event_type: privesc
+    severity: critical
+    enabled: true
+    tags: [privesc, root]
+    conditions:
+      - field: new_uid
+        op: eq
+        value: 0
+      - field: uid
+        op: ne
+        value: 0
+
+  - name: setreuid-to-root
+    description: Process used setreuid to obtain root effective UID
+    event_type: privesc
+    severity: critical
+    enabled: true
+    tags: [privesc, root]
+    conditions:
+      - field: syscall
+        op: eq
+        value: setreuid
+      - field: new_uid
+        op: eq
+        value: 0
+
+  - name: sudo-exec
+    description: sudo executed — user escalation attempt
+    event_type: exec
+    severity: high
+    enabled: true
+    tags: [privesc, sudo]
+    conditions:
+      - field: filename
+        op: contains
+        value: sudo
+
+  - name: su-exec
+    description: su executed — switch user
+    event_type: exec
+    severity: medium
+    enabled: true
+    tags: [privesc, su]
+    conditions:
+      - field: filename
+        op: regex
+        value: "^/bin/su$|^/usr/bin/su$"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SENSITIVE FILE ACCESS
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - name: passwd-read
+    description: /etc/passwd opened — credential file access
+    event_type: open
+    severity: high
+    enabled: true
+    tags: [credentials, files]
+    conditions:
+      - field: path
+        op: eq
+        value: /etc/passwd
+
+  - name: shadow-read
+    description: /etc/shadow opened — hashed password file access
+    event_type: open
+    severity: critical
+    enabled: true
+    tags: [credentials, files]
+    conditions:
+      - field: path
+        op: eq
+        value: /etc/shadow
+
+  - name: sudoers-read
+    description: /etc/sudoers or sudoers.d accessed
+    event_type: open
+    severity: high
+    enabled: true
+    tags: [credentials, sudo]
+    conditions:
+      - field: path
+        op: startswith
+        value: /etc/sudoers
+
+  - name: ssh-key-read
+    description: SSH private key accessed
+    event_type: open
+    severity: high
+    enabled: true
+    tags: [credentials, ssh]
+    conditions:
+      - field: path
+        op: regex
+        value: "\.ssh/(id_rsa|id_ed25519|id_ecdsa|id_dsa)$"
+
+  - name: cron-modification
+    description: Cron file opened for writing (persistence mechanism)
+    event_type: open
+    severity: medium
+    enabled: true
+    tags: [persistence, cron]
+    conditions:
+      - field: path
+        op: startswith
+        value: /etc/cron
+      - field: flags
+        op: gt
+        value: 0    # O_RDONLY=0, any write flag > 0
+
+  - name: hosts-modification
+    description: /etc/hosts opened — DNS hijacking risk
+    event_type: open
+    severity: medium
+    enabled: true
+    tags: [network, dns]
+    conditions:
+      - field: path
+        op: eq
+        value: /etc/hosts
+
+  - name: sshd-config-access
+    description: SSH daemon config file accessed
+    event_type: open
+    severity: medium
+    enabled: true
+    tags: [ssh, config]
+    conditions:
+      - field: path
+        op: eq
+        value: /etc/ssh/sshd_config
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROCESS EXECUTION
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - name: shell-spawn
+    description: Interactive shell spawned (could indicate reverse shell)
+    event_type: exec
+    severity: medium
+    enabled: true
+    tags: [shell, execution]
+    conditions:
+      - field: filename
+        op: regex
+        value: "/(bash|sh|zsh|fish|dash|ksh|tcsh)$"
+
+  - name: netcat-exec
+    description: netcat/ncat executed — possible reverse shell or data exfil
+    event_type: exec
+    severity: high
+    enabled: true
+    tags: [network, shell, c2]
+    conditions:
+      - field: filename
+        op: regex
+        value: "/(nc|ncat|netcat|nmap)$"
+
+  - name: curl-wget-exec
+    description: curl or wget executed — possible download cradle
+    event_type: exec
+    severity: low
+    enabled: true
+    tags: [network, download]
+    conditions:
+      - field: filename
+        op: regex
+        value: "/(curl|wget)$"
+
+  - name: python-exec
+    description: Python interpreter spawned
+    event_type: exec
+    severity: info
+    enabled: true
+    tags: [scripting]
+    conditions:
+      - field: filename
+        op: regex
+        value: "/(python|python3|python2)(\.\d+)?$"
+
+  - name: compiler-exec
+    description: Compiler invoked (gcc, clang, make) — possible in-place build
+    event_type: exec
+    severity: info
+    enabled: true
+    tags: [build, execution]
+    conditions:
+      - field: filename
+        op: regex
+        value: "/(gcc|clang|cc|make|cmake)$"
+
+  - name: package-manager-exec
+    description: Package manager invoked (apt, yum, dnf, pip)
+    event_type: exec
+    severity: low
+    enabled: true
+    tags: [package, execution]
+    conditions:
+      - field: filename
+        op: regex
+        value: "/(apt|apt-get|yum|dnf|pip|pip3|npm|yarn)$"
+
+  - name: suid-binary-exec
+    description: Common SUID binary executed from unexpected location
+    event_type: exec
+    severity: medium
+    enabled: true
+    tags: [suid, execution]
+    conditions:
+      - field: filename
+        op: regex
+        value: "/(pkexec|newgrp|passwd|chsh|chfn|mount|umount)$"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NETWORK CONNECTIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - name: outbound-ssh
+    description: Outbound SSH connection (port 22)
+    event_type: connect
+    severity: low
+    enabled: true
+    tags: [network, ssh]
+    conditions:
+      - field: dport
+        op: eq
+        value: 22
+
+  - name: outbound-dns
+    description: Outbound DNS query (port 53) — monitor for DNS tunneling
+    event_type: connect
+    severity: info
+    enabled: false   # noisy, disable by default
+    tags: [network, dns]
+    conditions:
+      - field: dport
+        op: eq
+        value: 53
+
+  - name: high-port-connection
+    description: Connection to high (uncommon) destination port
+    event_type: connect
+    severity: info
+    enabled: false   # too noisy for most environments
+    tags: [network]
+    conditions:
+      - field: dport
+        op: gt
+        value: 9000
+
+  - name: connect-to-loopback
+    description: Unusual loopback connection (could be local C2/proxy)
+    event_type: connect
+    severity: info
+    enabled: false
+    tags: [network, loopback]
+    conditions:
+      - field: dst
+        op: startswith
+        value: "127."

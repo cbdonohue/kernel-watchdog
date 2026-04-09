@@ -1,0 +1,12 @@
+# kernel-watchdog requirements
+#
+# BCC (eBPF) is installed system-wide via package manager — NOT pip:
+#   Ubuntu/Debian: sudo apt install python3-bpfcc linux-headers-$(uname -r)
+#   Fedora/RHEL:   sudo dnf install bcc python3-bcc kernel-devel
+#
+# Python packages:
+pyyaml>=6.0
+
+# For development / testing only:
+# pytest>=7.0
+# pytest-cov>=4.0
